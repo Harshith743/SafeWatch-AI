@@ -71,6 +71,7 @@ def extract_adverse_event(user_input):
     patterns = [
         r"took\s+(?P<drug>.*?)\s+and\s+experienced\s+(?P<reaction>.*)",
         r"took\s+(?P<drug>.*?)\s+and\s+felt\s+(?P<reaction>.*)",
+        r"took\s+(?P<drug>.*?)\s+and\s+had\s+(?P<reaction>.*)",
         r"after\s+taking\s+(?P<drug>.*?)\s*,\s*I\s+had\s+(?P<reaction>.*)",
         r"used\s+(?P<drug>.*?)\s+and\s+got\s+(?P<reaction>.*)"
     ]
@@ -116,6 +117,83 @@ def save_adverse_event(event_data):
     except Exception as e:
         print(f"Error saving data: {e}")
 
+def parse_message(user_input):
+    """
+    Parses the user input to determine intent and extract relevant entities (drug, reaction).
+    
+    Args:
+        user_input (str): The user's raw message.
+        
+    Returns:
+        dict: A dictionary containing:
+            - 'intent': 'query', 'report', or 'unknown'
+            - 'drug': extracted drug name (or None)
+            - 'reaction': extracted reaction (or None for queries)
+    """
+    text = user_input.strip().lower()
+    
+    # --- Intent 1: Query (Show adverse events) ---
+    # Patterns: 
+    # "Show adverse events for [drug]"
+    # "Show me side effects of [drug]"
+    # "What are the side effects of [drug]"
+    # "Is [drug] safe?"
+    # "Tell me about [drug]"
+    query_patterns = [
+        r"show\s+(?:me\s+)?(?:adverse\s+events|side\s+effects)\s+(?:for|of)\s+(?P<drug>.*)",
+        r"what\s+are\s+the\s+(?:adverse\s+events|side\s+effects)\s+(?:for|of)\s+(?P<drug>.*)",
+        r"tell\s+me\s+about\s+(?:side\s+effects\s+of\s+)?(?P<drug>.*)",
+        r"is\s+(?P<drug>.*)\s+safe",
+        r"does\s+(?P<drug>.*)\s+have\s+side\s+effects",
+        r"reactions\s+to\s+(?P<drug>.*)"
+    ]
+    
+    for pattern in query_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return {
+                "intent": "query",
+                "drug": match.group("drug").strip("? ."),
+                "reaction": None
+            }
+
+    # --- Intent 2: Report (I took X and felt Y) ---
+    # Using existing logic but wrapped
+    extracted_data = extract_adverse_event(user_input)
+    if extracted_data:
+        # Extract Age
+        # Patterns: "25 years old", "age 30", "30yo", "30 yo"
+        age = None
+        age_patterns = [
+            r"age\s*(?:is|:|of)?\s*(\d{1,3})",              # "age is 21", "age: 21"
+            r"(\d{1,3})\s*(?:years?|yrs?|yo)(?:\s+old)?",    # "21 years", "30yo", "21 yrs"
+            r"\((\d{1,3})\)"                                # "(21)" - fallback for frontend appended context
+        ]
+        for p in age_patterns:
+            m = re.search(p, text)
+            if m:
+                age = m.group(1)
+                break
+        
+        # Extract Gender
+        # Patterns: "male", "female", "man", "woman"
+        gender = None
+        if re.search(r"\b(male|man|boy)\b", text):
+            gender = "Male"
+        elif re.search(r"\b(female|woman|girl)\b", text):
+            gender = "Female"
+
+        return {
+            "intent": "report",
+            "drug": extracted_data["drug"],
+            "reaction": extracted_data["reaction"],
+            "age": age,
+            "gender": gender
+        }
+        
+    return {"intent": "unknown", "drug": None, "reaction": None}
+
+
 def chatbot():
     """
     Main chatbot loop for the command line interface.
@@ -138,12 +216,12 @@ def chatbot():
             
         if not user_input:
             continue
-
-        # Feature 1: Query adverse events
-        # Regex to capture "Show adverse events for [drug]"
-        query_match = re.search(r"show\s+adverse\s+events\s+for\s+(.*)", user_input, re.IGNORECASE)
-        if query_match:
-            drug_name = query_match.group(1).strip()
+            
+        # Parse the message
+        parsed = parse_message(user_input)
+        
+        if parsed["intent"] == "query":
+            drug_name = parsed["drug"]
             print(f"Chatbot: Searching for adverse events associated with '{drug_name}'...")
             events = fetch_adverse_events(drug_name)
             
@@ -155,9 +233,13 @@ def chatbot():
                 print(f"Chatbot: I couldn't find any specific adverse event reports for '{drug_name}' right now.")
             continue
 
-        # Feature 2: Detect adverse event from user input
-        extracted_data = extract_adverse_event(user_input)
-        if extracted_data:
+        elif parsed["intent"] == "report":
+            extracted_data = {
+                "drug": parsed["drug"],
+                "reaction": parsed["reaction"],
+                "timestamp": datetime.datetime.now().isoformat()
+            }
+            # We already have detection, proceed to confirm
             print(f"Chatbot: I detected a potential adverse event.")
             print(f"  Drug detected: {extracted_data['drug']}")
             print(f"  Reaction detected: {extracted_data['reaction']}")
