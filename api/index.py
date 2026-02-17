@@ -107,13 +107,38 @@ def save_adverse_event(event_data):
 def parse_message(user_input):
     text = user_input.strip().lower()
     
-    # Query Patterns
+    
+    # Query Patterns - Expanded for robust natural language understanding
     query_patterns = [
-        r"show\s+(?:me\s+)?(?:adverse\s+events|side\s+effects)\s+(?:for|of)\s+(?P<drug>.*)",
-        r"what\s+are\s+the\s+(?:adverse\s+events|side\s+effects)\s+(?:for|of)\s+(?P<drug>.*)",
-        r"tell\s+me\s+about\s+(?:side\s+effects\s+of\s+)?(?P<drug>.*)",
-        r"is\s+(?P<drug>.*)\s+safe",
-        r"does\s+(?P<drug>.*)\s+have\s+side\s+effects",
+        # --- Explicit "Show me" / "List" ---
+        r"(?:please\s+)?(?:show|list|give|display|tell)\s+(?:me\s+)?(?:all\s+)?(?:the\s+)?(?:common\s+|potential\s+|possible\s+)?(?:adverse\s+events|side\s+effects|reactions|adverse\s+reactions|negative\s+effects|bad\s+effects|symptoms|issues|problems|complications|hazards|risks|dangers)\s+(?:associated\s+with|related\s+to|caused\s+by|for|of|from)\s+(?P<drug>.*)",
+        
+        # --- "What are" questions ---
+        r"what\s+(?:are|can\s+be)\s+(?:the\s+)?(?:common\s+|potential\s+|possible\s+)?(?:adverse\s+events|side\s+effects|reactions|adverse\s+reactions|negative\s+effects|bad\s+effects|symptoms|issues|problems|complications|hazards|risks|dangers)(?:\s+reported)?\s+(?:associated\s+with|related\s+to|caused\s+by|for|of|from|to|with)\s+(?P<drug>.*)",
+        r"what\s+(?:happens|can\s+happen)\s+(?:if|when)\s+(?:i|you|someone|one)\s+(?:take|takes|use|uses)\s+(?P<drug>.*)",
+        r"what\s+(?:issues|problems)\s+(?:do|does)\s+(?P<drug>.*)\s+(?:cause|have)",
+        
+        # --- Safety / Danger questions ---
+        r"(?:is|are)\s+(?P<drug>.*)\s+(?:safe|dangerous|harmful|bad|risky)(?:\s+to\s+take|to\s+use)?",
+        r"how\s+(?:safe|dangerous|bad|risky)\s+is\s+(?P<drug>.*)",
+        r"(?:safety|danger|risk)\s+(?:profile\s+)?of\s+(?P<drug>.*)",
+        
+        # --- "Does X cause Y?" (Generalized to catch the drug query) ---
+        r"does\s+(?P<drug>.*?)\s+(?:cause|lead\s+to|result\s+in|trigger|produce|create|have)\s+(?:any\s+)?(?:side\s+effects|adverse\s+events|reactions|issues|problems)",
+        r"can\s+(?P<drug>.*?)\s+(?:make\s+you|cause|lead\s+to|result\s+in)\s+(?:feel|have|experience)",
+        
+        # --- Specific "Issues with" / "Report on" ---
+        r"(?:any\s+)?(?:reports|information|data|details|facts|complaints)\s+(?:on|about|regarding|concerning)\s+(?:the\s+)?(?:safety|side\s+effects|adverse\s+events)\s+(?:of|for|with)\s+(?P<drug>.*)",
+        r"(?:problems|issues|concerns|trouble|complications)\s+(?:with|caused\s+by|from|using|taking)\s+(?P<drug>.*)",
+        r"bad\s+(?:reactions|experiences?|things?)\s+(?:to|from|with)\s+(?P<drug>.*)",
+        
+        # --- Short / Conversational ---
+        r"tell\s+me\s+about\s+(?P<drug>.*)",
+        r"(?:side\s+effects|adverse\s+events|reactions)\s+(?:of|for)\s+(?P<drug>.*)",
+        r"(?:side\s+effects|adverse\s+events|reactions)\s+(?P<drug>.*)", # "Side effects Ibuprofen"
+        r"(?P<drug>.*?)\s+(?:side\s+effects|adverse\s+events|reactions|safety)", # "Ibuprofen side effects"
+        
+        # --- Catch-all "Reactions to" ---
         r"reactions\s+to\s+(?P<drug>.*)"
     ]
     
