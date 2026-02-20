@@ -3,12 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
 import os
-import sys
 
-# Ensure we can import from local modules if needed
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
-from api.utils import (
+from utils import (
     fetch_adverse_events, 
     parse_with_llm, 
     parse_message, 

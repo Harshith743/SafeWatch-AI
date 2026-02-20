@@ -7,18 +7,32 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 
 # --- Configuration ---
-load_dotenv()
+# --- Configuration ---
+# Load .env from the root directory (parent of backend/)
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path)
+
+print(f"DEBUG: Loading .env from {os.path.abspath(dotenv_path)}")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+print(f"DEBUG: GEMINI_API_KEY found: {bool(GEMINI_API_KEY)}")
 
 OPENFDA_API_URL = "https://api.fda.gov/drug/event.json"
 # Use /tmp for Vercel serverless environment (ephemeral storage)
 # In production with persistence, this should be a database.
-DATA_FILE = "/tmp/adverse_events.json" if os.environ.get("VERCEL") else "adverse_events.json"
+# For local dev, we can just use the local file.
+DATA_FILE = "adverse_events.json" 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    model = genai.GenerativeModel('gemini-1.5-flash') # Use a fast, efficient model
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel('gemini-1.5-flash') # Use a fast, efficient model
+        print("DEBUG: Gemini Model initialized successfully.")
+    except Exception as e:
+        print(f"DEBUG: Failed to initialize Gemini model: {e}")
+        model = None
 else:
+    print("DEBUG: GEMINI_API_KEY is missing. Model not initialized.")
     model = None
 
 # --- Core Functions ---
@@ -95,7 +109,9 @@ def parse_with_llm(user_input):
     """
     Uses Gemini API to extract structured data from user input.
     """
+    print(f"DEBUG: Entering parse_with_llm. Model is: {model}")
     if not model:
+        print("DEBUG: Model is None, returning None.")
         return None
         
     prompt = f"""
@@ -108,18 +124,22 @@ def parse_with_llm(user_input):
     - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
 
     User Text: "{user_input}"
-    
-    Return ONLY raw JSON.
     """
     
     try:
-        response = model.generate_content(prompt)
-        # Clean up code blocks if present
-        text = response.text.replace("```json", "").replace("```", "").strip()
-        data = json.loads(text)
+        print(f"DEBUG: Sending prompt to Gemini...")
+        # Use JSON mode for reliability
+        response = model.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+        print(f"DEBUG: Raw LLM Response: {response.text}")
+        
+        data = json.loads(response.text)
+        print(f"DEBUG: Parsed Data: {data}")
         return data
     except Exception as e:
-        print(f"LLM Parse Error: {e}")
+        print(f"LLM Parse Error details: {type(e).__name__}: {e}")
         return None
 
 def parse_message(user_input):
