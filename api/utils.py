@@ -123,22 +123,28 @@ def parse_with_llm(user_input):
     """
     print(f"DEBUG: Entering parse_with_llm. Model is: {model}")
     if not model:
-        print("DEBUG: Model is None, returning None.")
+        print(f"DEBUG: Model is None, returning None.")
         return None
         
-    prompt = f"""
-    Analyze the following user text related to drug safety/adverse events.
-    Extract the following fields in JSON format:
-    - intent: "query" (asking for info), "report" (reporting a personal experience), or "unknown"
-    - drug: The name of the drug mentioned (or null)
-    - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
-    - age: Patient age if mentioned (e.g., "25"), else null
-    - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
-
-    User Text: "{user_input}"
-    """
-    
     try:
+        # Dynamically list models to see what the API key has access to
+        available_models = []
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                available_models.append(m.name)
+        
+        prompt = f"""
+        Analyze the following user text related to drug safety/adverse events.
+        Extract the following fields in JSON format:
+        - intent: "query" (asking for info), "report" (reporting a personal experience), or "unknown"
+        - drug: The name of the drug mentioned (or null)
+        - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
+        - age: Patient age if mentioned (e.g., "25"), else null
+        - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
+    
+        User Text: "{user_input}"
+        """
+        
         print(f"DEBUG: Sending prompt to Gemini...")
         # Use JSON mode for reliability
         response = model.generate_content(
@@ -151,7 +157,7 @@ def parse_with_llm(user_input):
         print(f"DEBUG: Parsed Data: {data}")
         return data
     except Exception as e:
-        error_msg = f"LLM Parse Error details: {type(e).__name__}: {str(e)}"
+        error_msg = f"LLM Parse Error: {type(e).__name__}: {str(e)} | Available Models: {available_models}"
         print(error_msg)
         return {"intent": "DEBUG_ERROR", "error": error_msg}
 
