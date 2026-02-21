@@ -98,9 +98,6 @@ async def chat(request: ChatRequest):
         )
         return ChatResponse(response=response_text, report_saved=True)
 
-    elif parsed["intent"] == "DEBUG_ERROR":
-        return ChatResponse(response=f"⚠️ LLM DEBUG INFO: {parsed.get('error')}")
-
     return ChatResponse(
         response="I didn't quite catch that. Try asking 'What are the side effects of [drug]?' or 'I took [drug] and felt [symptom]'."
     )
