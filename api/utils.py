@@ -151,8 +151,6 @@ def parse_with_llm(user_input):
             )
             raw_text = response.choices[0].message.content.strip()
             print(f"DEBUG: Raw LLM Response: {raw_text}")
-            
-            raw_text = response.text.strip()
             # Failsafe against markdown block wrap
             if raw_text.startswith("```"):
                 lines = raw_text.split("\n")
