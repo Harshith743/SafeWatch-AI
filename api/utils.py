@@ -3,7 +3,8 @@ import json
 import re
 import os
 import datetime
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 # --- Configuration ---
@@ -24,15 +25,14 @@ DATA_FILE = "adverse_events.json"
 
 if GEMINI_API_KEY:
     try:
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-2.5-flash-lite') # Exact match from ListModels
-        print("DEBUG: Gemini Model initialized successfully.")
+        client = genai.Client(api_key=GEMINI_API_KEY)
+        print("DEBUG: Gemini Client initialized successfully.")
     except Exception as e:
-        print(f"DEBUG: Failed to initialize Gemini model: {e}")
-        model = None
+        print(f"DEBUG: Failed to initialize Gemini client: {e}")
+        client = None
 else:
-    print("DEBUG: GEMINI_API_KEY is missing. Model not initialized.")
-    model = None
+    print("DEBUG: GEMINI_API_KEY is missing. Client not initialized.")
+    client = None
 
 # --- Core Functions ---
 
@@ -122,9 +122,9 @@ def parse_with_llm(user_input):
     Uses Gemini API to extract structured data from user input.
     """
     import time # needed for retries
-    print(f"DEBUG: Entering parse_with_llm. Model is: {model}")
-    if not model:
-        print(f"DEBUG: Model is None, returning None.")
+    print(f"DEBUG: Entering parse_with_llm. Client is: {client}")
+    if not client:
+        print(f"DEBUG: Client is None, returning None.")
         return None
         
     prompt = f"""
@@ -144,9 +144,12 @@ def parse_with_llm(user_input):
         try:
             print(f"DEBUG: Sending prompt to Gemini... (Attempt {attempt + 1}/{max_retries})")
             # Use JSON mode for reliability
-            response = model.generate_content(
-                prompt,
-                generation_config={"response_mime_type": "application/json"}
+            response = client.models.generate_content(
+                model='gemini-2.5-flash-lite',
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
             )
             print(f"DEBUG: Raw LLM Response: {response.text}")
             
