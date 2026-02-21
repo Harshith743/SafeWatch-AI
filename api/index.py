@@ -43,9 +43,7 @@ async def chat(request: ChatRequest):
     # 1. Try LLM first
     parsed = parse_with_llm(user_input)
     
-    if parsed and parsed.get("intent") == "llm_error":
-        error_msg = parsed.get("error", "Unknown LLM Error")
-        return ChatResponse(response=f"⚠️ **Gemini API Error Detected:**\n`{error_msg}`\n\nThis usually means the Free-Tier Rate Limit was hit during the presentation. Please wait 30 seconds and try again!")
+
 
     # 2. Fallback to Regex if LLM fails or is not configured
     if not parsed:
