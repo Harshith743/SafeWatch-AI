@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 import os
 
-from utils import (
+from api.utils import (
     fetch_adverse_events, 
     parse_with_llm, 
     parse_message, 
