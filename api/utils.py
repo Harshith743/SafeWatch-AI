@@ -25,7 +25,7 @@ DATA_FILE = "adverse_events.json"
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash') # Use standard globally available model
+        model = genai.GenerativeModel('gemini-2.5-flash-lite') # Exact match from ListModels
         print("DEBUG: Gemini Model initialized successfully.")
     except Exception as e:
         print(f"DEBUG: Failed to initialize Gemini model: {e}")
@@ -127,12 +127,6 @@ def parse_with_llm(user_input):
         return None
         
     try:
-        # Dynamically list models to see what the API key has access to
-        available_models = []
-        for m in genai.list_models():
-            if 'generateContent' in m.supported_generation_methods:
-                available_models.append(m.name)
-        
         prompt = f"""
         Analyze the following user text related to drug safety/adverse events.
         Extract the following fields in JSON format:
@@ -157,9 +151,8 @@ def parse_with_llm(user_input):
         print(f"DEBUG: Parsed Data: {data}")
         return data
     except Exception as e:
-        error_msg = f"LLM Parse Error: {type(e).__name__}: {str(e)} | Available Models: {available_models}"
-        print(error_msg)
-        return {"intent": "DEBUG_ERROR", "error": error_msg}
+        print(f"LLM Parse Error details: {type(e).__name__}: {str(e)}")
+        return None
 
 def parse_message(user_input):
     text = user_input.strip().lower()
