@@ -3,8 +3,7 @@ import json
 import re
 import os
 import datetime
-from google import genai
-from google.genai import types
+from groq import Groq
 from dotenv import load_dotenv
 
 # --- Configuration ---
@@ -14,8 +13,8 @@ dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path)
 
 print(f"DEBUG: Loading .env from {os.path.abspath(dotenv_path)}")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-print(f"DEBUG: GEMINI_API_KEY found: {bool(GEMINI_API_KEY)}")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+print(f"DEBUG: GROQ_API_KEY found: {bool(GROQ_API_KEY)}")
 
 OPENFDA_API_URL = "https://api.fda.gov/drug/event.json"
 # Use /tmp for Vercel serverless environment (ephemeral storage)
@@ -23,15 +22,15 @@ OPENFDA_API_URL = "https://api.fda.gov/drug/event.json"
 # For local dev, we can just use the local file.
 DATA_FILE = "adverse_events.json" 
 
-if GEMINI_API_KEY:
+if GROQ_API_KEY:
     try:
-        client = genai.Client(api_key=GEMINI_API_KEY)
-        print("DEBUG: Gemini Client initialized successfully.")
+        client = Groq(api_key=GROQ_API_KEY)
+        print("DEBUG: Groq Client initialized successfully.")
     except Exception as e:
-        print(f"DEBUG: Failed to initialize Gemini client: {e}")
+        print(f"DEBUG: Failed to initialize Groq client: {e}")
         client = None
 else:
-    print("DEBUG: GEMINI_API_KEY is missing. Client not initialized.")
+    print("DEBUG: GROQ_API_KEY is missing. Client not initialized.")
     client = None
 
 # --- Core Functions ---
@@ -119,7 +118,7 @@ def save_adverse_event(event_data):
 
 def parse_with_llm(user_input):
     """
-    Uses Gemini API to extract structured data from user input.
+    Uses Groq API to extract structured data from user input.
     """
     import time # needed for retries
     import traceback
@@ -130,7 +129,7 @@ def parse_with_llm(user_input):
         
     prompt = f"""
     Analyze the following user text related to drug safety/adverse events.
-    Extract the following fields in JSON format:
+    Extract the following fields and output a JSON object containing exactly these fields (with no other text):
     - intent: "query" (asking for info), "report" (reporting a personal experience), or "unknown"
     - drug: The name of the drug mentioned (or null)
     - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
@@ -143,16 +142,15 @@ def parse_with_llm(user_input):
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            print(f"DEBUG: Sending prompt to Gemini... (Attempt {attempt + 1}/{max_retries})")
+            print(f"DEBUG: Sending prompt to Groq... (Attempt {attempt + 1}/{max_retries})")
             # Use JSON mode for reliability
-            response = client.models.generate_content(
-                model='gemini-2.5-pro',
-                contents=prompt,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
+            response = client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model='llama-3.3-70b-versatile',
+                response_format={"type": "json_object"}
             )
-            print(f"DEBUG: Raw LLM Response: {response.text}")
+            raw_text = response.choices[0].message.content.strip()
+            print(f"DEBUG: Raw LLM Response: {raw_text}")
             
             raw_text = response.text.strip()
             # Failsafe against markdown block wrap
