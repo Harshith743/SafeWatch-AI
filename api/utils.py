@@ -121,38 +121,59 @@ def parse_with_llm(user_input):
     """
     Uses Gemini API to extract structured data from user input.
     """
+    import time # needed for retries
     print(f"DEBUG: Entering parse_with_llm. Model is: {model}")
     if not model:
         print(f"DEBUG: Model is None, returning None.")
         return None
         
-    try:
-        prompt = f"""
-        Analyze the following user text related to drug safety/adverse events.
-        Extract the following fields in JSON format:
-        - intent: "query" (asking for info), "report" (reporting a personal experience), or "unknown"
-        - drug: The name of the drug mentioned (or null)
-        - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
-        - age: Patient age if mentioned (e.g., "25"), else null
-        - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
+    prompt = f"""
+    Analyze the following user text related to drug safety/adverse events.
+    Extract the following fields in JSON format:
+    - intent: "query" (asking for info), "report" (reporting a personal experience), or "unknown"
+    - drug: The name of the drug mentioned (or null)
+    - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
+    - age: Patient age if mentioned (e.g., "25"), else null
+    - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
+
+    User Text: "{user_input}"
+    """
     
-        User Text: "{user_input}"
-        """
-        
-        print(f"DEBUG: Sending prompt to Gemini...")
-        # Use JSON mode for reliability
-        response = model.generate_content(
-            prompt,
-            generation_config={"response_mime_type": "application/json"}
-        )
-        print(f"DEBUG: Raw LLM Response: {response.text}")
-        
-        data = json.loads(response.text)
-        print(f"DEBUG: Parsed Data: {data}")
-        return data
-    except Exception as e:
-        print(f"LLM Parse Error details: {type(e).__name__}: {str(e)}")
-        return None
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            print(f"DEBUG: Sending prompt to Gemini... (Attempt {attempt + 1}/{max_retries})")
+            # Use JSON mode for reliability
+            response = model.generate_content(
+                prompt,
+                generation_config={"response_mime_type": "application/json"}
+            )
+            print(f"DEBUG: Raw LLM Response: {response.text}")
+            
+            raw_text = response.text.strip()
+            # Failsafe against markdown block wrap
+            if raw_text.startswith("```"):
+                lines = raw_text.split("\n")
+                if len(lines) >= 3:
+                     raw_text = "\n".join(lines[1:-1]).strip()
+            
+            # Failsafe extract JSON block
+            if not raw_text.startswith("{"):
+                start = raw_text.find("{")
+                end = raw_text.rfind("}")
+                if start != -1 and end != -1:
+                    raw_text = raw_text[start:end+1]
+
+            data = json.loads(raw_text)
+            print(f"DEBUG: Parsed Data: {data}")
+            return data
+            
+        except Exception as e:
+            print(f"LLM Parse Error details (Attempt {attempt + 1}/{max_retries}): {type(e).__name__}: {str(e)}")
+            if attempt < max_retries - 1:
+                time.sleep(1) # Wait 1s before retrying (handles rate limits)
+            else:
+                return None
 
 def parse_message(user_input):
     text = user_input.strip().lower()
