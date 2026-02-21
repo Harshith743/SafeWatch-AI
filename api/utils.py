@@ -26,7 +26,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash') # Use a fast, efficient model
+        model = genai.GenerativeModel('gemini-1.5-flash-8b') # Use a fast, efficient model
         print("DEBUG: Gemini Model initialized successfully.")
     except Exception as e:
         print(f"DEBUG: Failed to initialize Gemini model: {e}")
