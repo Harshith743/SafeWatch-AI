@@ -1,15 +1,17 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: 'Outfit', system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: dark;
   color: rgba(255, 255, 255, 0.87);
-  background-color: #0d1117;
+  background-color: #030712;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -17,13 +19,23 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-  background: radial-gradient(circle at 50% 10%, #1a2333 0%, #0d1117 100%);
+@layer base {
+  body {
+    @apply font-sans antialiased bg-black text-gray-100 overflow-hidden;
+    background: 
+      radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.15), transparent 50%),
+      radial-gradient(circle at 85% 30%, rgba(14, 165, 233, 0.15), transparent 50%),
+      radial-gradient(circle at 50% 80%, rgba(45, 212, 191, 0.1), transparent 50%);
+    background-color: #030712; /* Deepest black/slate */
+    background-size: 200% 200%;
+    animation: gradientMove 15s ease infinite alternate;
+  }
+}
+
+@keyframes gradientMove {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 100%; }
 }
 
 #root {
@@ -33,9 +45,27 @@ body {
   flex-direction: column;
 }
 
+@layer utilities {
+  .glass-panel {
+    @apply bg-white/[0.03] border border-white/10 backdrop-blur-xl shadow-2xl;
+  }
+  .glass-message-bot {
+    @apply bg-white/[0.05] border border-white/10 backdrop-blur-md;
+  }
+  .glass-message-user {
+    @apply bg-gradient-to-br from-indigo-500/80 to-purple-600/80 border border-white/20 backdrop-blur-md text-white shadow-lg;
+  }
+  .glass-input {
+    @apply bg-white/[0.04] border border-white/10 backdrop-blur-2xl focus:bg-white/[0.07] focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50;
+  }
+  .glass-card {
+    @apply bg-white/[0.02] border border-white/[0.05] rounded-xl backdrop-blur-sm hover:bg-white/[0.04] transition-colors;
+  }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar {
-  width: 8px;
+  width: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -43,12 +73,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #30363d;
-  border-radius: 4px;
+  @apply bg-white/10 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #484f58;
+  @apply bg-white/20;
 }
 
 /* Animations */
