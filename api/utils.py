@@ -151,8 +151,9 @@ def parse_with_llm(user_input):
         print(f"DEBUG: Parsed Data: {data}")
         return data
     except Exception as e:
-        print(f"LLM Parse Error details: {type(e).__name__}: {e}")
-        return None
+        error_msg = f"LLM Parse Error details: {type(e).__name__}: {str(e)}"
+        print(error_msg)
+        return {"intent": "DEBUG_ERROR", "error": error_msg}
 
 def parse_message(user_input):
     text = user_input.strip().lower()
