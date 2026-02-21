@@ -21,7 +21,6 @@ OPENFDA_API_URL = "https://api.fda.gov/drug/event.json"
 # In production with persistence, this should be a database.
 # For local dev, we can just use the local file.
 DATA_FILE = "adverse_events.json" 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if GEMINI_API_KEY:
     try:
