@@ -146,7 +146,7 @@ def parse_with_llm(user_input):
             print(f"DEBUG: Sending prompt to Gemini... (Attempt {attempt + 1}/{max_retries})")
             # Use JSON mode for reliability
             response = client.models.generate_content(
-                model='gemini-2.0-flash',
+                model='gemini-2.5-pro',
                 contents=prompt,
                 config=types.GenerateContentConfig(
                     response_mime_type="application/json"
