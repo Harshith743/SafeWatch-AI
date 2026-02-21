@@ -178,7 +178,7 @@ def parse_with_llm(user_input):
             if attempt < max_retries - 1:
                 time.sleep(1) # Wait 1s before retrying (handles rate limits)
             else:
-                return None
+                return {"intent": "llm_error", "error": f"{type(e).__name__}: {str(e)}"}
 
 def parse_message(user_input):
     text = user_input.strip().lower()
