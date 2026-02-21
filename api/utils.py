@@ -122,6 +122,7 @@ def parse_with_llm(user_input):
     Uses Gemini API to extract structured data from user input.
     """
     import time # needed for retries
+    import traceback
     print(f"DEBUG: Entering parse_with_llm. Client is: {client}")
     if not client:
         print(f"DEBUG: Client is None, returning None.")
@@ -173,6 +174,7 @@ def parse_with_llm(user_input):
             
         except Exception as e:
             print(f"LLM Parse Error details (Attempt {attempt + 1}/{max_retries}): {type(e).__name__}: {str(e)}")
+            traceback.print_exc()
             if attempt < max_retries - 1:
                 time.sleep(1) # Wait 1s before retrying (handles rate limits)
             else:
