@@ -4,3 +4,4 @@ requests
 pydantic
 google-generativeai
 python-dotenv
+upstash-redis

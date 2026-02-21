@@ -85,7 +85,20 @@ def extract_adverse_event(user_input):
 
 def save_adverse_event(event_data):
     try:
-        # Load existing data
+        KV_REST_API_URL = os.getenv("KV_REST_API_URL")
+        KV_REST_API_TOKEN = os.getenv("KV_REST_API_TOKEN")
+
+        # 1. Try Vercel KV (Upstash Redis) for production persistence
+        if KV_REST_API_URL and KV_REST_API_TOKEN:
+            from upstash_redis import Redis
+            redis = Redis(url=KV_REST_API_URL, token=KV_REST_API_TOKEN)
+            
+            # Save the event to a Redis list
+            redis.lpush("adverse_events", json.dumps(event_data))
+            print("Successfully saved report to Vercel KV Database")
+            return
+
+        # 2. Fallback to local JSON file for local development
         if os.path.exists(DATA_FILE):
              with open(DATA_FILE, 'r') as f:
                 try:
