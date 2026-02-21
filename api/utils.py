@@ -25,7 +25,7 @@ DATA_FILE = "adverse_events.json"
 if GEMINI_API_KEY:
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel('gemini-1.5-flash-8b-latest') # Correct literal for Python SDK
+        model = genai.GenerativeModel('gemini-1.5-flash') # Use standard globally available model
         print("DEBUG: Gemini Model initialized successfully.")
     except Exception as e:
         print(f"DEBUG: Failed to initialize Gemini model: {e}")
@@ -151,9 +151,8 @@ def parse_with_llm(user_input):
         print(f"DEBUG: Parsed Data: {data}")
         return data
     except Exception as e:
-        error_msg = f"LLM Parse Error details: {type(e).__name__}: {str(e)}"
-        print(error_msg)
-        return {"intent": "DEBUG_ERROR", "error": error_msg}
+        print(f"LLM Parse Error details: {type(e).__name__}: {e}")
+        return None
 
 def parse_message(user_input):
     text = user_input.strip().lower()
