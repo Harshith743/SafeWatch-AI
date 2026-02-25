@@ -5,3 +5,7 @@ pydantic
 groq
 python-dotenv
 upstash-redis
+passlib[bcrypt]
+python-jose[cryptography]
+sqlalchemy
+psycopg2-binary

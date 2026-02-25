@@ -1,10 +1,17 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Menu, Plus, User, Bot, AlertTriangle } from 'lucide-react';
+import { Send, Menu, Plus, User, Bot, AlertTriangle, LogOut } from 'lucide-react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
+import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
+import Dashboard from './pages/Dashboard';
+import AdverseEventsChart from './components/AdverseEventsChart';
 
-function App() {
+function Chat() {
+    const { user, token, logout } = useAuth();
     const [messages, setMessages] = useState([
         {
             role: 'bot',
@@ -15,7 +22,26 @@ function App() {
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [pendingReport, setPendingReport] = useState(null);
+    const [recentChats, setRecentChats] = useState([]);
     const messagesEndRef = useRef(null);
+
+    const fetchHistory = async () => {
+        if (!token) return;
+        try {
+            const response = await axios.get('/api/user/history', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            // Deduplicate history to show unique drugs searched recently
+            const uniqueDrugs = [...new Set(response.data.map(h => h.drug))];
+            setRecentChats(uniqueDrugs.slice(0, 5));
+        } catch (err) {
+            console.error("Failed to fetch history for sidebar", err);
+        }
+    };
+
+    useEffect(() => {
+        fetchHistory();
+    }, [token]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,17 +71,24 @@ function App() {
                 messageToSend = `${pendingReport} ${userMessage.content}`;
             }
 
-            const response = await axios.post('/api/chat', { message: messageToSend });
+            const response = await axios.post('/api/chat',
+                { message: messageToSend },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
 
             const botMessage = {
                 role: 'bot',
                 content: response.data.response,
                 data: response.data.data, // Accessing the list if present
+                stats: response.data.stats, // New stats array
                 reportSaved: response.data.report_saved,
                 timestamp: new Date().toISOString()
             };
 
             setMessages(prev => [...prev, botMessage]);
+
+            // Refresh sidebar recent searches
+            fetchHistory();
 
             if (response.data.missing_info) {
                 // Keep the accumulated message as pending so next input adds to it
@@ -90,24 +123,41 @@ function App() {
         <div className="flex h-screen text-gray-100 font-sans overflow-hidden bg-transparent">
             {/* Sidebar - Desktop */}
             <div className="hidden md:flex w-[280px] flex-col glass-panel m-4 rounded-2xl p-4 z-10">
-                <button className="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-all duration-300 mb-6 text-sm text-gray-200 shadow-sm hover:shadow-md font-medium">
+                <button className="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-all duration-300 mb-3 text-sm text-gray-200 shadow-sm hover:shadow-md font-medium">
                     <Plus size={16} />
                     <span>New chat</span>
                 </button>
 
+                <Link to="/dashboard" className="flex items-center justify-center gap-2 p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/10 transition-all duration-300 mb-6 text-sm text-gray-200 shadow-sm hover:shadow-md font-medium">
+                    <User size={16} />
+                    <span>Dashboard</span>
+                </Link>
+
                 <div className="flex-1 overflow-y-auto pr-2">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-2">Recent</div>
-                    <div className="p-3 bg-white/[0.02] hover:bg-white/[0.06] rounded-xl cursor-pointer text-sm truncate text-gray-300 transition-colors border border-transparent hover:border-white/5">
-                        Adverse events for Aspirin
-                    </div>
+                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 px-2">Recent Searches</div>
+                    {recentChats.map((drug, idx) => (
+                        <div key={idx} className="p-3 mb-2 bg-white/[0.02] hover:bg-white/[0.06] rounded-xl cursor-pointer text-sm truncate text-gray-300 transition-colors border border-transparent hover:border-white/5 capitalize">
+                            {drug}
+                        </div>
+                    ))}
+                    {recentChats.length === 0 && (
+                        <div className="text-xs text-slate-500 px-2">No recent searches</div>
+                    )}
                 </div>
 
                 <div className="mt-auto border-t border-white/10 pt-4">
-                    <div className="flex items-center gap-3 px-3 py-2 hover:bg-white/[0.05] rounded-xl cursor-pointer transition-colors">
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-bold shadow-lg ring-2 ring-white/10">
-                            U
+                    <div className="flex items-center justify-between px-3 py-2 hover:bg-white/[0.05] rounded-xl cursor-pointer transition-colors group">
+                        <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="w-9 h-9 flex-shrink-0 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-500 flex items-center justify-center text-sm font-bold shadow-lg ring-2 ring-white/10 uppercase">
+                                {user?.username ? user.username.charAt(0) : 'U'}
+                            </div>
+                            <div className="text-sm font-medium tracking-wide truncate">
+                                {user?.username || 'User'}
+                            </div>
                         </div>
-                        <div className="text-sm font-medium tracking-wide">User</div>
+                        <button onClick={logout} className="opacity-0 group-hover:opacity-100 p-1.5 hover:bg-white/10 rounded-lg transition-all text-gray-400 hover:text-white" title="Log out">
+                            <LogOut size={16} />
+                        </button>
                     </div>
                 </div>
             </div>
@@ -118,7 +168,9 @@ function App() {
                 <div className="md:hidden flex items-center p-4 glass-panel justify-between z-20">
                     <Menu size={20} className="text-gray-400" />
                     <span className="font-semibold text-gray-100 tracking-wide">SafeWatch AI</span>
-                    <Plus size={20} className="text-gray-400" />
+                    <button onClick={logout} className="p-1.5 hover:bg-white/10 rounded-lg transition-all text-gray-400 hover:text-white">
+                        <LogOut size={20} />
+                    </button>
                 </div>
 
                 {/* Messages */}
@@ -151,7 +203,7 @@ function App() {
                                                 <motion.ul
                                                     initial={{ opacity: 0, marginTop: 0 }}
                                                     animate={{ opacity: 1, marginTop: 16 }}
-                                                    className="space-y-2 glass-card p-4">
+                                                    className="space-y-2 glass-card p-4 mb-2">
                                                     {msg.data.slice(0, 5).map((item, i) => (
                                                         <motion.li
                                                             initial={{ opacity: 0, x: -10 }}
@@ -164,6 +216,16 @@ function App() {
                                                         </motion.li>
                                                     ))}
                                                 </motion.ul>
+                                            )}
+
+                                            {/* Render Bar Chart if stats available */}
+                                            {msg.stats && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, height: 0 }}
+                                                    animate={{ opacity: 1, height: 'auto' }}
+                                                >
+                                                    <AdverseEventsChart data={msg.stats} />
+                                                </motion.div>
                                             )}
 
                                             {msg.reportSaved && (
@@ -233,4 +295,34 @@ function App() {
     )
 }
 
-export default App
+const ProtectedRoute = ({ children }) => {
+    const { user, loading } = useAuth();
+    if (loading) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white">Loading...</div>;
+    if (!user) return <Navigate to="/login" />;
+    return children;
+};
+
+function App() {
+    return (
+        <AuthProvider>
+            <BrowserRouter>
+                <Routes>
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route path="/dashboard" element={
+                        <ProtectedRoute>
+                            <Dashboard />
+                        </ProtectedRoute>
+                    } />
+                    <Route path="/" element={
+                        <ProtectedRoute>
+                            <Chat />
+                        </ProtectedRoute>
+                    } />
+                </Routes>
+            </BrowserRouter>
+        </AuthProvider>
+    );
+}
+
+export default App;

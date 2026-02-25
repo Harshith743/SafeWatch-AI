@@ -1,0 +1,8 @@
+{
+    "name": "safewatch-ai",
+    "version": "1.0.0",
+    "description": "SafeWatch AI Application",
+    "scripts": {
+        "build": "cd frontend && npm install && npm run build"
+    }
+}

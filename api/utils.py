@@ -62,6 +62,28 @@ def fetch_adverse_events(drug_name):
         print(f"Error fetching data from OpenFDA: {e}")
         return None
 
+def fetch_drug_statistics(drug_name):
+    print(f"DEBUG: Fetching statistics for '{drug_name}'...")
+    try:
+        params = {
+            'search': f'patient.drug.medicinalproduct:"{drug_name}"',
+            'count': 'patient.reaction.reactionmeddrapt.exact'
+        }
+        response = requests.get(OPENFDA_API_URL, params=params, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        if 'results' not in data:
+            return None
+            
+        # Return top 10 most common reactions
+        return data['results'][:10]
+
+    except Exception as e:
+        print(f"Error fetching statistics from OpenFDA: {e}")
+        return None
+
 def extract_adverse_event(user_input):
     patterns = [
         r"took\s+(?P<drug>.*?)\s+and\s+experienced\s+(?P<reaction>.*)",
