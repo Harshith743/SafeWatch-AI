@@ -153,7 +153,7 @@ def parse_with_llm(user_input):
     Analyze the following user text related to drug safety/adverse events.
     Extract the following fields and output a JSON object containing exactly these fields (with no other text):
     - intent: "query" (asking for info), "report" (reporting a personal experience), or "unknown"
-    - drug: The name of the drug mentioned (or null)
+    - drug: The correctly spelled, official generic name of the drug mentioned (or null). If the user provides a brand name (e.g., Tylenol, Advil, Lipitor) or mispells the name, you MUST convert it to the correctly spelled generic name (e.g., Acetaminophen, Ibuprofen, Atorvastatin).
     - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
     - age: Patient age if mentioned (e.g., "25"), else null
     - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
