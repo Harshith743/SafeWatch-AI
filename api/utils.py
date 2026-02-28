@@ -138,7 +138,7 @@ def save_adverse_event(event_data):
     except Exception as e:
         print(f"Error saving data: {e}")
 
-def parse_with_llm(user_input):
+def parse_with_llm(user_input, user_medications=None):
     """
     Uses Groq API to extract structured data from user input.
     """
@@ -149,6 +149,14 @@ def parse_with_llm(user_input):
         print(f"DEBUG: Client is None, returning None.")
         return None
         
+    med_context_instruction = ""
+    if user_medications:
+        med_list = [f"{med.drug_name} ({med.dosage or 'unknown dose'})" for med in user_medications]
+        med_context_instruction = f"""
+    - response_warning: The user is currently taking the following medications: {', '.join(med_list)}. If relevant to their query or report, provide a brief, polite warning about potential interactions or connections based on this knowledge. However, always explicitly state that they should consult a doctor and that you are an AI, not a medical professional. If not relevant, return null."""
+    else:
+        med_context_instruction = "\n    - response_warning: null"
+
     prompt = f"""
     Analyze the following user text related to drug safety/adverse events.
     Extract the following fields and output a JSON object containing exactly these fields (with no other text):
@@ -156,7 +164,7 @@ def parse_with_llm(user_input):
     - drug: The correctly spelled, official generic name of the drug mentioned (or null). If the user provides a brand name (e.g., Tylenol, Advil, Lipitor) or mispells the name, you MUST convert it to the correctly spelled generic name (e.g., Acetaminophen, Ibuprofen, Atorvastatin).
     - reaction: The adverse event/reaction experienced (for reports) or asked about (optional for queries) (or null)
     - age: Patient age if mentioned (e.g., "25"), else null
-    - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null
+    - gender: Patient gender if mentioned (e.g., "Male", "Female"), else null{med_context_instruction}
 
     User Text: "{user_input}"
     """

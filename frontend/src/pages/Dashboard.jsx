@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Clock, FileText, AlertCircle, ArrowLeft, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import MedicineCabinet from '../components/MedicineCabinet';
 
 export default function Dashboard() {
     const { token, user } = useAuth();
@@ -101,6 +102,8 @@ export default function Dashboard() {
                         {error}
                     </div>
                 )}
+
+                <MedicineCabinet />
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Search History Column */}

@@ -13,6 +13,7 @@ class User(Base):
 
     reports = relationship("Report", back_populates="user")
     search_history = relationship("SearchHistory", back_populates="user")
+    medications = relationship("Medication", back_populates="user")
 
 class Report(Base):
     __tablename__ = "reports"
@@ -36,3 +37,14 @@ class SearchHistory(Base):
     timestamp = Column(String, default=lambda: datetime.now().isoformat())
 
     user = relationship("User", back_populates="search_history")
+
+class Medication(Base):
+    __tablename__ = "medications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    drug_name = Column(String)
+    dosage = Column(String, nullable=True)
+    date_added = Column(String, default=lambda: datetime.now().isoformat())
+
+    user = relationship("User", back_populates="medications")

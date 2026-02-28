@@ -59,6 +59,11 @@ class ChatResponse(BaseModel):
     stats: Optional[List[dict]] = None
     report_saved: bool = False
     missing_info: Optional[List[str]] = None
+    warning: Optional[str] = None
+
+class MedicationCreate(BaseModel):
+    drug_name: str
+    dosage: Optional[str] = None
 
 # --- Auth Routes ---
 
@@ -97,7 +102,7 @@ async def login(user: UserLogin, db: Session = Depends(get_db)):
     return {"access_token": access_token, "token_type": "bearer", "username": db_user.username, "email": db_user.email}
 
 from api.auth import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user, get_optional_current_user
-from api.models import User, Report, SearchHistory
+from api.models import User, Report, SearchHistory, Medication
 # ... (keep existing imports, handled below)
 from typing import Optional, List
 
@@ -110,8 +115,14 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
     if not user_input:
         return ChatResponse(response="Please say something!")
 
+    user_medications = None
+    if current_user:
+        user_medications = db.query(Medication).filter(Medication.user_id == current_user.id).all()
+
     # 1. Try LLM first
-    parsed = parse_with_llm(user_input)
+    parsed = parse_with_llm(user_input, user_medications)
+    
+    warning = parsed.get("response_warning") if parsed else None
     
     # 2. Fallback to Regex if LLM fails or is not configured
     if not parsed:
@@ -134,9 +145,9 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
             
         if events:
             response_text = f"Found {len(events)} recent reports for {drug_name}."
-            return ChatResponse(response=response_text, data=events, stats=stats)
+            return ChatResponse(response=response_text, data=events, stats=stats, warning=warning)
         else:
-            return ChatResponse(response=f"I couldn't find any specific adverse event reports for '{drug_name}' right now.")
+            return ChatResponse(response=f"I couldn't find any specific adverse event reports for '{drug_name}' right now.", warning=warning)
 
     elif parsed["intent"] == "report":
         extracted_data = {
@@ -186,7 +197,7 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
             f"Age: {extracted_data['age']}\n"
             f"Gender: {extracted_data['gender']}"
         )
-        return ChatResponse(response=response_text, report_saved=True)
+        return ChatResponse(response=response_text, report_saved=True, warning=warning)
 
     return ChatResponse(
         response="I didn't quite catch that. Try asking 'What are the side effects of [drug]?' or 'I took [drug] and felt [symptom]'."
@@ -201,6 +212,32 @@ async def get_user_reports(current_user: User = Depends(get_current_user), db: S
 async def get_user_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     history = db.query(SearchHistory).filter(SearchHistory.user_id == current_user.id).order_by(SearchHistory.id.desc()).all()
     return history
+
+@app.get("/api/user/medications")
+async def get_user_medications(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    medications = db.query(Medication).filter(Medication.user_id == current_user.id).order_by(Medication.id.desc()).all()
+    return medications
+
+@app.post("/api/user/medications")
+async def add_user_medication(med: MedicationCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    new_med = Medication(
+        user_id=current_user.id,
+        drug_name=med.drug_name,
+        dosage=med.dosage
+    )
+    db.add(new_med)
+    db.commit()
+    db.refresh(new_med)
+    return new_med
+
+@app.delete("/api/user/medications/{med_id}")
+async def delete_user_medication(med_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    med = db.query(Medication).filter(Medication.id == med_id, Medication.user_id == current_user.id).first()
+    if not med:
+        raise HTTPException(status_code=404, detail="Medication not found")
+    db.delete(med)
+    db.commit()
+    return {"status": "deleted"}
 
 @app.get("/api/health")
 async def health_check():

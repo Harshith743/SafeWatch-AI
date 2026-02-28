@@ -82,6 +82,7 @@ function Chat() {
                 data: response.data.data, // Accessing the list if present
                 stats: response.data.stats, // New stats array
                 reportSaved: response.data.report_saved,
+                warning: response.data.warning,
                 timestamp: new Date().toISOString()
             };
 
@@ -225,6 +226,21 @@ function Chat() {
                                                     animate={{ opacity: 1, height: 'auto' }}
                                                 >
                                                     <AdverseEventsChart data={msg.stats} />
+                                                </motion.div>
+                                            )}
+
+                                            {/* Render Safety Warning */}
+                                            {msg.warning && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, marginTop: 0 }}
+                                                    animate={{ opacity: 1, marginTop: 16 }}
+                                                    className="mt-4 p-4 border border-rose-500/30 bg-rose-500/10 rounded-xl relative"
+                                                >
+                                                    <div className="absolute -top-3 -left-3 bg-rose-500 text-white rounded-full p-1 shadow-lg ring-4 ring-[#0A0C10]">
+                                                        <AlertTriangle size={16} />
+                                                    </div>
+                                                    <h4 className="text-rose-400 font-semibold mb-1 ml-3 text-sm">Interaction Warning</h4>
+                                                    <p className="text-rose-200/90 text-sm ml-3 leading-relaxed">{msg.warning}</p>
                                                 </motion.div>
                                             )}
 
