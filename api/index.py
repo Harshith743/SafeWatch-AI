@@ -200,7 +200,11 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
         return ChatResponse(response=response_text, report_saved=True, warning=warning)
 
     return ChatResponse(
-        response="I didn't quite catch that. Try asking 'What are the side effects of [drug]?' or 'I took [drug] and felt [symptom]'."
+        response=(
+            "I couldn't understand that request. "
+            "You can ask things like: 'What are the side effects of [drug]?' or "
+            "'I took [drug] and felt [symptom]—is that a side effect?'."
+        )
     )
 
 @app.get("/api/user/reports")
