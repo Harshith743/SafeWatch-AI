@@ -20,6 +20,7 @@ class Report(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"))
+    name = Column(String, nullable=True)
     drug = Column(String)
     reaction = Column(String)
     age = Column(String, nullable=True)

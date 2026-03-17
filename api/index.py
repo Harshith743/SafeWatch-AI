@@ -2,8 +2,9 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 import os
+from sqlalchemy import inspect, text
 
 from sqlalchemy.orm import Session
 from api.database import engine, Base, get_db
@@ -11,8 +12,7 @@ from api.models import User
 from api.auth import get_password_hash, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from datetime import timedelta
 
-# Initialize SQLite database
-# This creates the file 'safewatch.db' and the 'users' table
+# Initialize database tables
 Base.metadata.create_all(bind=engine)
 
 from api.utils import (
@@ -53,6 +53,15 @@ class Token(BaseModel):
 class ChatRequest(BaseModel):
     message: str
 
+class ReportFormField(BaseModel):
+    name: Literal["name", "age", "gender", "drug", "adverse_event"]
+    label: str
+    required: bool = True
+    value: Optional[str] = None
+
+class ReportForm(BaseModel):
+    fields: List[ReportFormField]
+
 class ChatResponse(BaseModel):
     response: str
     data: Optional[List[str]] = None
@@ -60,6 +69,36 @@ class ChatResponse(BaseModel):
     report_saved: bool = False
     missing_info: Optional[List[str]] = None
     warning: Optional[str] = None
+    report_form: Optional[ReportForm] = None
+
+class ReportSubmitRequest(BaseModel):
+    name: str
+    age: str
+    gender: str
+    drug: str
+    adverse_event: str
+
+
+def _ensure_reports_table_columns():
+    """
+    Lightweight migration for environments without Alembic.
+    Ensures `reports.name` exists (nullable) for older databases.
+    """
+    try:
+        inspector = inspect(engine)
+        if "reports" not in inspector.get_table_names():
+            return
+        cols = {c["name"] for c in inspector.get_columns("reports")}
+        if "name" not in cols:
+            with engine.begin() as conn:
+                conn.execute(text("ALTER TABLE reports ADD COLUMN name TEXT"))
+    except Exception as e:
+        # Avoid crashing the app on managed DBs with restricted permissions;
+        # the feature will still work for fresh installs.
+        print(f"WARNING: Could not ensure reports.name column: {e}")
+
+
+_ensure_reports_table_columns()
 
 class MedicationCreate(BaseModel):
     drug_name: str
@@ -150,54 +189,28 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
             return ChatResponse(response=f"I couldn't find any specific adverse event reports for '{drug_name}' right now.", warning=warning)
 
     elif parsed["intent"] == "report":
-        extracted_data = {
-            "drug": parsed.get("drug"),
-            "reaction": parsed.get("reaction"),
-            "age": parsed.get("age"),
-            "gender": parsed.get("gender"),
-            "timestamp": "now"
-        }
-        
-        missing = []
-        if not extracted_data.get("drug"):
-             return ChatResponse(response="I couldn't identify the drug name. What drug did you take?")
-        if not extracted_data.get("reaction"):
-             return ChatResponse(response="I couldn't identify the reaction. What happened?")
-             
-        if not extracted_data["age"]:
-            missing.append("age")
-        if not extracted_data["gender"]:
-            missing.append("gender")
-            
-        if missing:
-            return ChatResponse(
-                response=f"I need a few more details to complete the report. Could you tell me the patient's {' and '.join(missing)}?",
-                missing_info=missing
-            )
+        extracted_drug = parsed.get("drug")
+        extracted_reaction = parsed.get("reaction")
 
-        # Save to database if user is logged in
-        if current_user:
-            new_report = Report(
-                user_id=current_user.id,
-                drug=extracted_data["drug"],
-                reaction=extracted_data["reaction"],
-                age=extracted_data["age"],
-                gender=extracted_data["gender"]
-            )
-            db.add(new_report)
-            db.commit()
+        fields: List[ReportFormField] = [
+            ReportFormField(name="name", label="Name", value=None),
+            ReportFormField(name="gender", label="Gender", value=parsed.get("gender")),
+            ReportFormField(name="age", label="Age", value=parsed.get("age")),
+            ReportFormField(name="drug", label="Drug", value=extracted_drug),
+            ReportFormField(name="adverse_event", label="Adverse event", value=extracted_reaction),
+        ]
+
+        # UX: if we didn't extract anything, treat it as a direct "start a report" request
+        if not extracted_drug and not extracted_reaction:
+            response_text = "Sure — please fill out the report details below."
         else:
-            # Fallback to local files if anonymous
-            save_adverse_event(extracted_data)
-        
-        response_text = (
-            f"I detected a potential adverse event and saved it.\n"
-            f"Drug: {extracted_data['drug']}\n"
-            f"Reaction: {extracted_data['reaction']}\n"
-            f"Age: {extracted_data['age']}\n"
-            f"Gender: {extracted_data['gender']}"
+            response_text = "I started a report using what you shared. Please complete the remaining details below."
+
+        return ChatResponse(
+            response=response_text,
+            warning=warning,
+            report_form=ReportForm(fields=fields),
         )
-        return ChatResponse(response=response_text, report_saved=True, warning=warning)
 
     return ChatResponse(
         response=(
@@ -205,6 +218,58 @@ async def chat(request: ChatRequest, db: Session = Depends(get_db), current_user
             "You can ask things like: 'What are the side effects of [drug]?' or "
             "'I took [drug] and felt [symptom]—is that a side effect?'."
         )
+    )
+
+
+@app.post("/api/report/submit", response_model=ChatResponse)
+async def submit_report(
+    request: ReportSubmitRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_current_user),
+):
+    payload = {
+        "name": request.name.strip(),
+        "age": request.age.strip(),
+        "gender": request.gender.strip(),
+        "drug": request.drug.strip(),
+        "reaction": request.adverse_event.strip(),
+    }
+
+    missing = [k for k, v in payload.items() if not v]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing required fields: {', '.join(missing)}")
+
+    if current_user:
+        new_report = Report(
+            user_id=current_user.id,
+            name=payload["name"],
+            drug=payload["drug"],
+            reaction=payload["reaction"],
+            age=payload["age"],
+            gender=payload["gender"],
+        )
+        db.add(new_report)
+        db.commit()
+        db.refresh(new_report)
+        return ChatResponse(
+            response=f"Thanks - your adverse event report was submitted (Report #{new_report.id}).",
+            report_saved=True,
+        )
+
+    # Anonymous fallback persistence
+    save_adverse_event(
+        {
+            "name": payload["name"],
+            "drug": payload["drug"],
+            "reaction": payload["reaction"],
+            "age": payload["age"],
+            "gender": payload["gender"],
+            "timestamp": "now",
+        }
+    )
+    return ChatResponse(
+        response="Thanks - your adverse event report was submitted.",
+        report_saved=True,
     )
 
 @app.get("/api/user/reports")

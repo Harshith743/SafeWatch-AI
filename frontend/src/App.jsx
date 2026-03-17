@@ -21,8 +21,10 @@ function Chat() {
     ]);
     const [input, setInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
-    const [pendingReport, setPendingReport] = useState(null);
     const [recentChats, setRecentChats] = useState([]);
+    const [reportDrafts, setReportDrafts] = useState({});
+    const [submittingReportForIndex, setSubmittingReportForIndex] = useState(null);
+    const [submittedReportIndices, setSubmittedReportIndices] = useState({});
     const messagesEndRef = useRef(null);
 
     const fetchHistory = async () => {
@@ -65,15 +67,9 @@ function Chat() {
         setIsLoading(true);
 
         try {
-            // If we have a pending report (waiting for age/gender), append this new input to the original message
-            let messageToSend = userMessage.content;
-            if (pendingReport) {
-                messageToSend = `${pendingReport} ${userMessage.content}`;
-            }
-
             const response = await axios.post('/api/chat',
-                { message: messageToSend },
-                { headers: { Authorization: `Bearer ${token}` } }
+                { message: userMessage.content },
+                token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
             );
 
             const botMessage = {
@@ -83,22 +79,27 @@ function Chat() {
                 stats: response.data.stats, // New stats array
                 reportSaved: response.data.report_saved,
                 warning: response.data.warning,
+                reportForm: response.data.report_form,
                 timestamp: new Date().toISOString()
             };
 
-            setMessages(prev => [...prev, botMessage]);
+            setMessages(prev => {
+                const next = [...prev, botMessage];
+                const botIndex = next.length - 1;
+
+                if (botMessage.reportForm?.fields?.length) {
+                    const initial = {};
+                    botMessage.reportForm.fields.forEach((f) => {
+                        initial[f.name] = f.value || '';
+                    });
+                    setReportDrafts(drafts => ({ ...drafts, [botIndex]: initial }));
+                }
+
+                return next;
+            });
 
             // Refresh sidebar recent searches
             fetchHistory();
-
-            if (response.data.missing_info) {
-                // Keep the accumulated message as pending so next input adds to it
-                // We store the accumulated message so we keep adding to it until complete
-                setPendingReport(messageToSend);
-            } else {
-                // Clear pending if successful or not a report flow
-                setPendingReport(null);
-            }
 
         } catch (error) {
             console.error("Error sending message:", error);
@@ -110,6 +111,64 @@ function Chat() {
             }]);
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const updateReportDraftField = (messageIndex, fieldName, value) => {
+        setReportDrafts(prev => ({
+            ...prev,
+            [messageIndex]: {
+                ...(prev[messageIndex] || {}),
+                [fieldName]: value
+            }
+        }));
+    };
+
+    const handleSubmitReport = async (messageIndex) => {
+        const draft = reportDrafts[messageIndex];
+        if (!draft) return;
+
+        setSubmittingReportForIndex(messageIndex);
+        try {
+            const payload = {
+                name: draft.name || '',
+                gender: draft.gender || '',
+                age: draft.age || '',
+                drug: draft.drug || '',
+                adverse_event: draft.adverse_event || ''
+            };
+
+            const res = await axios.post(
+                '/api/report/submit',
+                payload,
+                token ? { headers: { Authorization: `Bearer ${token}` } } : undefined
+            );
+
+            setSubmittedReportIndices(prev => ({ ...prev, [messageIndex]: true }));
+            setMessages(prev => [
+                ...prev,
+                {
+                    role: 'bot',
+                    content: res.data.response || 'Thanks — your adverse event report was submitted.',
+                    reportSaved: res.data.report_saved,
+                    timestamp: new Date().toISOString()
+                }
+            ]);
+            fetchHistory();
+        } catch (err) {
+            console.error("Failed to submit report:", err);
+            const message = err?.response?.data?.detail || "Sorry, I couldn't submit that report. Please check the fields and try again.";
+            setMessages(prev => [
+                ...prev,
+                {
+                    role: 'bot',
+                    content: message,
+                    isError: true,
+                    timestamp: new Date().toISOString()
+                }
+            ]);
+        } finally {
+            setSubmittingReportForIndex(null);
         }
     };
 
@@ -249,6 +308,80 @@ function Chat() {
                                                     initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                                                     className="mt-3 text-xs text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-medium tracking-wide">
                                                     ✓ Report securely saved to cloud
+                                                </motion.div>
+                                            )}
+
+                                            {msg.reportForm?.fields?.length > 0 && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, marginTop: 0 }}
+                                                    animate={{ opacity: 1, marginTop: 16 }}
+                                                    className="mt-4 glass-card p-4"
+                                                >
+                                                    <div className="text-sm font-semibold text-gray-200 mb-3">Adverse event report</div>
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                        {msg.reportForm.fields.map((field) => {
+                                                            const value = reportDrafts[index]?.[field.name] ?? '';
+                                                            const disabled = Boolean(submittedReportIndices[index]);
+
+                                                            if (field.name === 'gender') {
+                                                                return (
+                                                                    <label key={field.name} className="text-xs text-gray-400">
+                                                                        <div className="mb-1">{field.label}</div>
+                                                                        <select
+                                                                            value={value}
+                                                                            onChange={(e) => updateReportDraftField(index, field.name, e.target.value)}
+                                                                            disabled={disabled || submittingReportForIndex === index}
+                                                                            className="w-full glass-input rounded-xl px-3 py-2 text-sm text-gray-100"
+                                                                        >
+                                                                            <option value="">Select…</option>
+                                                                            <option value="Male">Male</option>
+                                                                            <option value="Female">Female</option>
+                                                                            <option value="Other">Other</option>
+                                                                            <option value="Prefer not to say">Prefer not to say</option>
+                                                                        </select>
+                                                                    </label>
+                                                                );
+                                                            }
+
+                                                            const inputType = field.name === 'age' ? 'number' : 'text';
+                                                            const placeholder =
+                                                                field.name === 'adverse_event'
+                                                                    ? 'e.g., rash, nausea'
+                                                                    : field.name === 'drug'
+                                                                        ? 'e.g., ibuprofen'
+                                                                        : undefined;
+
+                                                            return (
+                                                                <label key={field.name} className="text-xs text-gray-400">
+                                                                    <div className="mb-1">{field.label}</div>
+                                                                    <input
+                                                                        type={inputType}
+                                                                        value={value}
+                                                                        onChange={(e) => updateReportDraftField(index, field.name, e.target.value)}
+                                                                        disabled={disabled || submittingReportForIndex === index}
+                                                                        placeholder={placeholder}
+                                                                        className="w-full glass-input rounded-xl px-3 py-2 text-sm text-gray-100 placeholder:text-gray-500"
+                                                                    />
+                                                                </label>
+                                                            );
+                                                        })}
+                                                    </div>
+
+                                                    <div className="mt-4 flex items-center gap-3">
+                                                        <button
+                                                            onClick={() => handleSubmitReport(index)}
+                                                            disabled={Boolean(submittedReportIndices[index]) || submittingReportForIndex === index}
+                                                            className={`px-4 py-2 rounded-xl text-sm font-semibold border transition-all ${Boolean(submittedReportIndices[index])
+                                                                ? 'bg-emerald-400/10 text-emerald-300 border-emerald-400/20 cursor-default'
+                                                                : 'bg-white/[0.06] hover:bg-white/[0.10] text-gray-100 border-white/10'
+                                                                }`}
+                                                        >
+                                                            {Boolean(submittedReportIndices[index]) ? 'Submitted' : (submittingReportForIndex === index ? 'Submitting…' : 'Submit report')}
+                                                        </button>
+                                                        <div className="text-[11px] text-gray-500 leading-snug">
+                                                            Please ensure details are accurate. This does not replace medical advice.
+                                                        </div>
+                                                    </div>
                                                 </motion.div>
                                             )}
                                         </div>

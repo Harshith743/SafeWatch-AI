@@ -53,6 +53,9 @@ def generate_report_pdf(report):
     pdf.cell(0, 10, " Patient Demographics", border=True, fill=True, new_x="LMARGIN", new_y="NEXT")
     
     pdf.set_font("helvetica", "", 12)
+    pdf.cell(40, 10, "Name:", border=False)
+    pdf.cell(0, 10, getattr(report, "name", None) or "Unknown", new_x="LMARGIN", new_y="NEXT")
+    
     pdf.cell(40, 10, "Age:", border=False)
     pdf.cell(0, 10, report.age if report.age else "Unknown", new_x="LMARGIN", new_y="NEXT")
     
